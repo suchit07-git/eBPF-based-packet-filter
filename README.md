@@ -44,14 +44,14 @@ Use the `-iface` option to specify the network interface on which the XDP progra
 sudo ./ebpf-packet-filter -iface wlan0
 ```
 
-3.  Drop Specific Packets:<br>
+2.  Drop Specific Packets:<br>
 Use the `-block` option to drop packets for specific protocols. This option accepts a comma-separated list of protocol numbers.
 For example, to drop ICMP (1) and UDP (17) packets:<br>
 ```bash
 sudo ./ebpf-packet-filter -block 1,17
 ```
 
-5. Filter Specific Packets:<br>
+3. Filter Specific Packets:<br>
 Use the `-filter` option to only pass packets of the specified protocols. This option also accepts a comma-separated list of protocol numbers.
 For example, to filter only IGMP (2), TCP (6), and IPv6 (41) packets:<br>
 ```bash
