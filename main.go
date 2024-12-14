@@ -16,10 +16,50 @@ import (
 
 const bpfProgramPath = "counter.o"
 
-func ipToString(ip uint32) net.IP {
+func ip4ToString(ip uint32) net.IP {
 	address := make(net.IP, 4)
 	binary.LittleEndian.PutUint32(address, ip)
 	return address
+}
+
+func ip6ToString(ip [16]byte) string {
+	return net.IP(ip[:]).String()
+}
+
+func printMap(m *ebpf.Map, ipToString func(interface{}) string) {
+	iter := m.Iterate()
+	var ip interface{}
+	var count uint64
+	for iter.Next(&ip, &count) {
+		fmt.Printf("%s: %d packets\n", ipToString(ip), count)
+	}
+	if err := iter.Err(); err != nil {
+		fmt.Printf("Error iterating map: %v\n", err)
+	}
+}
+
+func printIPv4Map(m *ebpf.Map) {
+	iter := m.Iterate()
+	var ip uint32
+	var count uint64
+	for iter.Next(&ip, &count) {
+		fmt.Printf("  %s: %d packets\n", ip4ToString(ip), count)
+	}
+	if err := iter.Err(); err != nil {
+		fmt.Printf("Error iterating map: %v\n", err)
+	}
+}
+
+func printIPv6Map(m *ebpf.Map) {
+	iter := m.Iterate()
+	var ip [16]byte
+	var count uint64
+	for iter.Next(&ip, &count) {
+		fmt.Printf("  %s: %d packets\n", ip6ToString(ip), count)
+	}
+	if err := iter.Err(); err != nil {
+		fmt.Printf("Error iterating map: %v\n", err)
+	}
 }
 
 func main() {
@@ -39,9 +79,10 @@ func main() {
 		log.Fatal("Failed to create BPF collection:", err)
 	}
 	defer collection.Close()
-	ipMap := collection.Maps["pkt_count"]
-	if ipMap == nil {
-		log.Fatal("Failed to find pkt_count map in the BPF program")
+	ip4Map := collection.Maps["ipv4_counter_map"]
+	ip6Map := collection.Maps["ipv6_counter_map"]
+	if ip4Map == nil || ip6Map == nil {
+		log.Fatal("Failed to find required map in the BPF program")
 	}
 	ifname := os.Args[2]
 	iface, err := net.InterfaceByName(ifname)
@@ -68,15 +109,10 @@ func main() {
 	for {
 		select {
 		case <-tick:
-			iter := ipMap.Iterate()
-			var ip uint32
-			var count uint64
-			for iter.Next(&ip, &count) {
-				log.Printf("%s: %d packets\n", ipToString(ip), count)
-			}
-			if err := iter.Err(); err != nil {
-				log.Fatal("Error iterating map:", err)
-			}
+			fmt.Println("IPv4 Packets count:")
+			printIPv4Map(ip4Map)
+			fmt.Println("IPv6 Packets count:")
+			printIPv6Map(ip6Map)
 		case <-stop:
 			log.Println("Received signal, exiting...")
 			return
