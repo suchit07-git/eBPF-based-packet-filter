@@ -11,6 +11,13 @@ struct {
     __type(key, __u8);
     __type(value, __u8);
     __uint(max_entries, 256);
+} filtered_protocols SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u8);
+    __type(value, __u8);
+    __uint(max_entries, 256);
 } blocked_protocols SEC(".maps");
 
 struct {
@@ -43,6 +50,9 @@ int xdp_protocol_filter(struct xdp_md *ctx) {
             return XDP_PASS;
         }
         __u8 protocol = ip->protocol;
+        if (!bpf_map_lookup_elem(&filtered_protocols, &protocol)) {
+            return XDP_DROP;
+        }
         if (bpf_map_lookup_elem(&blocked_protocols, &protocol)) {
             return XDP_DROP;
         }
@@ -59,6 +69,9 @@ int xdp_protocol_filter(struct xdp_md *ctx) {
             return XDP_PASS;
         }
         __u8 protocol = ip6->nexthdr;
+        if (!bpf_map_lookup_elem(&filtered_protocols, &protocol)) {
+            return XDP_DROP;
+        }
         if (bpf_map_lookup_elem(&blocked_protocols, &protocol)) {
             return XDP_DROP;
         }
