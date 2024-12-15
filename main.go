@@ -57,27 +57,49 @@ func ip6ToString(ip [16]byte) string {
 	return net.IP(ip[:]).String()
 }
 
-func printIPv4Map(m *ebpf.Map) {
+type IPv4Key struct {
+	IP       uint32
+	Protocol uint8
+	_        [3]byte // Padding
+}
+
+type IPv6Key struct {
+	IP       [16]byte
+	Protocol uint8
+	_        [3]byte // Padding
+}
+
+func printIPv4Map(m *ebpf.Map, protocolsMap map[uint8]string) {
 	iter := m.Iterate()
-	var ip uint32
+	var key IPv4Key
 	var count uint64
-	for iter.Next(&ip, &count) {
-		fmt.Printf("  %s: %d packets\n", ip4ToString(ip), count)
+	for iter.Next(&key, &count) {
+		protoName := protocolsMap[key.Protocol]
+		if protoName == "" {
+			protoName = fmt.Sprintf("Unknown (%d)", key.Protocol)
+		}
+		fmt.Printf("  %s [%s]: %d packets\n", ip4ToString(key.IP), protoName, count)
 	}
 	if err := iter.Err(); err != nil {
-		fmt.Printf("Error iterating map: %v\n", err)
+		fmt.Printf("Error iterating IPv4 map: %v\n", err)
 	}
 }
 
-func printIPv6Map(m *ebpf.Map) {
-	iter := m.Iterate()
-	var ip [16]byte
+func printIPv6Map(m *ebpf.Map, protocolsMap map[uint8]string) {
+	var key IPv6Key
 	var count uint64
-	for iter.Next(&ip, &count) {
-		fmt.Printf("  %s: %d packets\n", ip6ToString(ip), count)
+
+	mapIter := m.Iterate()
+	for mapIter.Next(&key, &count) {
+		protoName := protocolsMap[key.Protocol]
+		if protoName == "" {
+			protoName = fmt.Sprintf("Unknown (%d)", key.Protocol)
+		}
+		fmt.Printf("  %s [%s]: %d packets\n", ip6ToString(key.IP), protoName, count)
 	}
-	if err := iter.Err(); err != nil {
-		fmt.Printf("Error iterating map: %v\n", err)
+
+	if err := mapIter.Err(); err != nil {
+		fmt.Printf("Error iterating IPv6 map: %v\n", err)
 	}
 }
 
@@ -180,9 +202,9 @@ func main() {
 		select {
 		case <-tick:
 			fmt.Println("IPv4 Packets count:")
-			printIPv4Map(ip4Map)
+			printIPv4Map(ip4Map, protocolsMap)
 			fmt.Println("IPv6 Packets count:")
-			printIPv6Map(ip6Map)
+			printIPv6Map(ip6Map, protocolsMap)
 		case <-stop:
 			log.Println("Received signal, exiting...")
 			return

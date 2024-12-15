@@ -6,6 +6,16 @@
 #include <linux/ipv6.h>
 #include "headers/bpf_helpers.h"
 
+struct ipv4_key {
+    __be32 ip;
+    __u8 protocol;
+};
+
+struct ipv6_key {
+    struct in6_addr ip;
+    __u8 protocol;
+};
+
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u8);
@@ -22,14 +32,14 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, __be32);
+    __type(key, struct ipv4_key);
     __type(value, __u64);
     __uint(max_entries, 1024);
 } ipv4_counter_map SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, struct in6_addr);
+    __type(key, struct ipv6_key);
     __type(value, __u64);
     __uint(max_entries, 1024);
 } ipv6_counter_map SEC(".maps");
@@ -50,6 +60,9 @@ int xdp_protocol_filter(struct xdp_md *ctx) {
             return XDP_PASS;
         }
         __u8 protocol = ip->protocol;
+        struct ipv4_key key = {};
+        key.ip = ip->saddr;
+        key.protocol = protocol;
         if (!bpf_map_lookup_elem(&filtered_protocols, &protocol)) {
             return XDP_DROP;
         }
@@ -57,11 +70,11 @@ int xdp_protocol_filter(struct xdp_md *ctx) {
             return XDP_DROP;
         }
         __u64 *count, init_val = 1;
-        count = bpf_map_lookup_elem(&ipv4_counter_map, &ip->saddr);
+        count = bpf_map_lookup_elem(&ipv4_counter_map, &key);
         if (count) {
             __sync_fetch_and_add(count, 1);
         } else {
-            bpf_map_update_elem(&ipv4_counter_map, &ip->saddr, &init_val, BPF_ANY);
+            bpf_map_update_elem(&ipv4_counter_map, &key, &init_val, BPF_ANY);
         }
     } else if (h_proto == __constant_htons(ETH_P_IPV6)) {
         struct ipv6hdr *ip6 = (struct ipv6hdr*)(eth + 1);
@@ -69,6 +82,9 @@ int xdp_protocol_filter(struct xdp_md *ctx) {
             return XDP_PASS;
         }
         __u8 protocol = ip6->nexthdr;
+        struct ipv6_key key = {};
+        key.ip = ip6->saddr;
+        key.protocol = protocol;
         if (!bpf_map_lookup_elem(&filtered_protocols, &protocol)) {
             return XDP_DROP;
         }
@@ -76,11 +92,11 @@ int xdp_protocol_filter(struct xdp_md *ctx) {
             return XDP_DROP;
         }
         __u64 *count, init_val = 1;
-        count = bpf_map_lookup_elem(&ipv6_counter_map, &ip6->saddr);
+        count = bpf_map_lookup_elem(&ipv6_counter_map, &key);
         if (count) {
             __sync_fetch_and_add(count, 1);
         } else {
-            bpf_map_update_elem(&ipv6_counter_map, &ip6->saddr, &init_val, BPF_ANY);
+            bpf_map_update_elem(&ipv6_counter_map, &key, &init_val, BPF_ANY);
         }
     }
     return XDP_PASS;
